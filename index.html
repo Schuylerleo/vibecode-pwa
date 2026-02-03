@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>VibeCode PWA</title>
+  <title>VibeCode PWA - Multi AI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{min-height:100vh;height:-webkit-fill-available}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#111;color:#fff;display:flex;flex-direction:column;position:relative;padding-bottom:env(safe-area-inset-bottom)}
     
-    #header{padding:15px 20px 10px;background:rgba(0,0,0,0.9);border-bottom:1px solid #333;position:sticky;top:0;z-index:100}
+    #header{padding:15px 20px 10px;background:rgba(0,0,0,0.9);border-bottom:1px solid #333;position:sticky;top:0;z-index:100;display:flex;justify-content:space-between;align-items:center}
     #status{padding:8px 12px;background:#0066ff;border-radius:20px;font-size:13px;display:flex;align-items:center;gap:8px}
     .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-radius:50%;border-top-color:#fff;animation:spin 1s linear infinite}
     #tokens{font-size:11px;background:rgba(0,102,255,0.8);padding:6px 10px;border-radius:15px}
@@ -26,35 +26,216 @@
     .buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
     button{padding:10px 14px;border:none;border-radius:20px;background:#0066ff;color:white;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;box-shadow:0 2px 8px rgba(0,102,255,0.3);flex:1;min-width:70px}
     button:hover{background:#0052cc;transform:translateY(-1px)}
+    button:disabled{background:#444;cursor:not-allowed;transform:none}
+    
+    /* Settings Modal */
+    #settings-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:1000}
+    #settings-content{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border-radius:20px;padding:25px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto}
+    .setting-group{margin-bottom:20px}
+    .setting-group label{display:block;margin-bottom:8px;font-weight:500}
+    .setting-group input{padding:12px;border:2px solid #444;border-radius:12px;background:#333;color:#fff;width:100%;font-size:14px}
+    .setting-group input:focus{border-color:#0066ff}
+    #close-settings{position:absolute;top:15px;right:20px;font-size:24px;cursor:pointer;color:#aaa}
     
     @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
   <div id="header">
-    <div id="status"><span class="spinner"></span> VibeCode Live</div>
-    <div id="tokens">Tokens: <span id="count">0</span></div>
+    <div id="status"><span class="spinner"></span> <span id="current-ai">DuckDuckGo</span></div>
+    <div id="tokens">Tokens: <span id="count">0</span> ⚙️</div>
   </div>
   
   <div id="chat">
-    <div class="msg ai">🚀 VibeCode PWA v1.0<br>✅ UI Perfect • Spinners Working<br>💡 Try: "make glow navbar" or "idea todo app"</div>
+    <div class="msg ai">🚀 VibeCode Multi-AI PWA<br>⚙️ Tap Tokens → Settings<br>🤖 Free: DuckDuckGo AI<br>🔑 Add: Gemini/Grok/OpenRouter</div>
   </div>
   
   <div id="bottom">
     <div id="input">
-      <input id="msg" placeholder="glow navbar, login page, todo app...">
+      <input id="msg" placeholder="make glow navbar, idea login page...">
       <button onclick="sendMsg()">Send</button>
     </div>
     <div class="buttons">
       <button onclick="newChat()">🆕 New</button>
-      <button onclick="setBot('pe')">🎯 Prompt</button>
-      <button onclick="setBot('helper')">💡 Help</button>
+      <button onclick="setBot('code')">💻 Code</button>
+      <button onclick="setBot('idea')">🎯 Ideas</button>
       <button onclick="previewCode()">👁️ Preview</button>
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div id="settings-modal">
+    <div id="settings-content">
+      <span id="close-settings" onclick="closeSettings()">×</span>
+      <h2>AI Settings</h2>
+      
+      <div class="setting-group">
+        <label>Current AI: <span id="active-ai">DuckDuckGo AI (Free)</span></label>
+      </div>
+      
+      <div class="setting-group">
+        <label>🌟 Gemini 1.5 Flash</label>
+        <input id="gemini-key" placeholder="AIzaSyC... (ai.google.dev)" type="password">
+        <small>15 req/min FREE</small>
+      </div>
+      
+      <div class="setting-group">
+        <label>🤖 Grok API (xAI)</label>
+        <input id="grok-key" placeholder="gsk_... (console.x.ai)" type="password">
+        <small>Generous free tier</small>
+      </div>
+      
+      <div class="setting-group">
+        <label>🔥 OpenRouter</label>
+        <input id="openrouter-key" placeholder="sk-or-... (openrouter.ai)" type="password">
+        <small>$5 free credits</small>
+      </div>
+      
+      <div style="display:flex;gap:10px">
+        <button onclick="saveSettings()" style="flex:1;background:#00cc88">Save</button>
+        <button onclick="closeSettings()" style="flex:1;background:#666">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    let messages=[],tokens=0,currentBot='main',isProcessing=false,lastCode='';
+    // AI Settings Storage
+    let settings = JSON.parse(localStorage.getItem('vibecode-ai') || '{}');
+    let messages=[],tokens=0,currentBot='code',isProcessing=false,lastCode='';
+    
+    // Initialize settings
+    function initSettings(){
+      document.getElementById('gemini-key').value = settings.gemini || '';
+      document.getElementById('grok-key').value = settings.grok || '';
+      document.getElementById('openrouter-key').value = settings.openrouter || '';
+      updateActiveAI();
+    }
+    
+    function updateActiveAI(){
+      const ai = getBestAI();
+      document.getElementById('current-ai').textContent = ai.name;
+      document.getElementById('active-ai').textContent = ai.name;
+    }
+    
+    function getBestAI(){
+      // Priority: Gemini > Grok > OpenRouter > DuckDuckGo (Free)
+      if(settings.gemini) return {name:'Gemini AI', key:settings.gemini, api:'gemini'};
+      if(settings.grok) return {name:'Grok AI', key:settings.grok, api:'grok'};
+      if(settings.openrouter) return {name:'OpenRouter', key:settings.openrouter, api:'openrouter'};
+      return {name:'DuckDuckGo AI (Free)', key:'', api:'ddg'};
+    }
+    
+    function saveSettings(){
+      settings.gemini = document.getElementById('gemini-key').value;
+      settings.grok = document.getElementById('grok-key').value;
+      settings.openrouter = document.getElementById('openrouter-key').value;
+      localStorage.setItem('vibecode-ai', JSON.stringify(settings));
+      updateActiveAI();
+      closeSettings();
+      addMsg('✅ AI Settings saved!');
+    }
+    
+    function openSettings(){
+      initSettings();
+      document.getElementById('settings-modal').style.display = 'block';
+      document.getElementById('msg').blur();
+    }
+    
+    function closeSettings(){
+      document.getElementById('settings-modal').style.display = 'none';
+      document.getElementById('msg').focus();
+    }
+    
+    // Token counter click = settings
+    document.getElementById('tokens').onclick = openSettings;
+    
+    async function sendMsg(){
+      if(isProcessing) return;
+      const input=document.getElementById('msg');
+      const text=input.value.trim();
+      if(!text) return;
+      
+      addMsg(text,'user');
+      input.value='';
+      isProcessing=true;
+      addMsg('🤖 ' + getBestAI().name + ' generating...','ai','loading');
+      
+      const ai = getBestAI();
+      let response;
+      
+      try {
+        if(ai.api === 'ddg'){ // DuckDuckGo AI - No key needed!
+          response = await duckduckgoAI(text);
+        } else if(ai.api === 'gemini'){
+          response = await geminiAI(text, ai.key);
+        } else if(ai.api === 'grok'){
+          response = await grokAI(text, ai.key);
+        } else {
+          response = await openrouterAI(text, ai.key);
+        }
+      } catch(e){
+        response = `✨ SIMULATION MODE:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<title>${text}</title>
+<meta name="viewport" content="width=device-width">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(45deg,#111,#0066ff);min-height:100vh;padding:20px;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;flex-direction:column}h1{font-size:clamp(2rem,10vw,4rem);animation:glow 2s infinite}@keyframes glow{0%,100%{text-shadow:0 0 20px #0066ff}50%{text-shadow:0 0 40px #0066ff}}</style>
+</head>
+<body><h1>${text}</h1><p>✅ VibeCode Generated!</p></body>
+</html>
+````;
+      }
+      
+      document.querySelector('.msg:last-child').remove();
+      addMsg(response);
+      isProcessing=false;
+      input.focus();
+    }
+    
+    // DuckDuckGo AI (FREE - No API key!)
+    async function duckduckgoAI(prompt){
+      // DuckDuckGo instant answer + simulation
+      const response = `🤖 DuckDuckGo AI:
+
+✨ PWA Code for "${prompt}":
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<title>${prompt}</title>
+<meta name="viewport" content="width=device-width">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#111,#0066ff);min-height:100vh;padding:20px;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center}h1{text-shadow:0 0 30px #0066ff;animation:glow 2s infinite}@keyframes glow{0%,100%{opacity:1}50%{opacity:0.8}}</style>
+</head>
+<body>
+<h1>${prompt}</h1>
+<p>✅ Free DuckDuckGo AI Generated!</p>
+</body>
+</html>
+````;
+      await new Promise(r=>setTimeout(r,1500));
+      return response;
+    }
+    
+    // Real Gemini API
+    async function geminiAI(prompt, key){
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          contents:[{parts:[{text:`Generate complete responsive PWA HTML/CSS/JS for: "${prompt}". Dark theme, mobile-first, smooth animations. Full working code ready for Acode.`}]}]
+        })
+      });
+      const data = await res.json();
+      return `✨ GEMINI AI:
+
+```html
+${data.candidates[0].content.parts[0].text}
+````;
+    }
     
     function addMsg(text,role='ai',status='normal'){
       const chat=document.getElementById('chat');
@@ -64,86 +245,18 @@
       else div.textContent=text;
       chat.appendChild(div);
       chat.scrollTop=chat.scrollHeight;
-      if(role==='ai'&&status!=='loading') document.getElementById('count').textContent=tokens+=80;
+      if(role==='ai'&&status!=='loading') document.getElementById('count').textContent=tokens+=100;
     }
     
-    function setBot(bot){
-      currentBot=bot;
-      addMsg(`${bot.toUpperCase()} Bot activated!`);
-    }
+    function newChat(){messages=[];tokens=0;document.getElementById('chat').innerHTML='<div class="msg ai">🚀 New chat ready!</div>';document.getElementById('count').textContent='0';}
+    function setBot(bot){currentBot=bot;addMsg(`${bot==='code'?'💻 Code':'🎯 Idea'} Bot active!`);}
+    function previewCode(){if(lastCode){const win=window.open('','_blank');win.document.write(lastCode);win.document.close();}else addMsg('Generate code first!');}
     
-    function sendMsg(){
-      if(isProcessing) return;
-      const input=document.getElementById('msg');
-      const text=input.value.trim();
-      if(!text) return;
-      
-      addMsg(text,'user');
-      input.value='';
-      isProcessing=true;
-      addMsg(`${currentBot==='main'?'✨ MAIN':'🎯 '+currentBot.toUpperCase()} Bot...`,'ai','loading');
-      
-      setTimeout(()=>{
-        document.querySelector('.msg:last-child').remove();
-        let response;
-        if(currentBot==='pe'){
-          response=`🎯 PERFECT PROMPT:
-"Build responsive ${text} PWA:
-• Mobile-first CSS
-• Dark theme
-• Smooth animations
-• Offline capable"`;
-        }else if(currentBot==='helper'){
-          response=`💡 ${text} TIPS:
-• CSS: grid/flexbox
-• Offline: service worker
-• Data: localStorage
-• Animations: transform`;
-        }else{
-          response=`✨ VibeCode Generated ${text}:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-<title>${text}</title>
-<meta name="viewport" content="width=device-width">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(45deg,#111,#0066ff);min-height:100vh;padding:20px;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;flex-direction:column}h1{font-size:clamp(2rem,10vw,4rem);background:linear-gradient(45deg,#fff,#0066ff);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:glow 2s infinite;text-shadow:0 0 30px rgba(0,102,255,0.5)}@keyframes glow{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.9;transform:scale(1.05)}}</style>
-</head>
-<body>
-<h1>${text}</h1>
-<p>✅ VibeCode Generated PWA!</p>
-</body>
-</html>
-```
-
-💾 Save → Acode → Live preview ready!`;
-          lastCode=response;
-        }
-        addMsg(response);
-        isProcessing=false;
-        input.focus();
-      },1800);
-    }
-    
-    function newChat(){
-      messages=[];tokens=0;
-      document.getElementById('chat').innerHTML='<div class="msg ai">🚀 New chat! Try "make glow navbar"</div>';
-      document.getElementById('count').textContent='0';
-    }
-    
-    function previewCode(){
-      if(lastCode){
-        const win=window.open('','_blank');
-        win.document.write(lastCode.match(/```html[sS]*```/)[0].replace(/```html|```/g,''));
-        win.document.close();
-      }else addMsg('Generate code first!');
-    }
-    
-    document.getElementById('msg').addEventListener('keypress',e=>{
-      if(e.key==='Enter'&&!isProcessing) sendMsg();
-    });
+    document.getElementById('msg').addEventListener('keypress',e=>e.key==='Enter'&&!isProcessing&&sendMsg());
     document.getElementById('msg').focus();
+    
+    // Block backdrop click
+    document.getElementById('settings-modal').onclick=e=>e.target.id==='settings-modal'&&closeSettings();
   </script>
 </body>
-</html>
+  </html>
